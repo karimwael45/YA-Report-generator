@@ -539,10 +539,13 @@ function renderUploadStats(d){
   document.getElementById('st-qm').textContent=avgQM!=null?avgQM+'%':'—';
   document.getElementById('st-abs').textContent=avgAbs!=null?avgAbs:'—';
 
-  // Missing HW count (grade === 'Missing' or empty)
+  // ── FIX: guard against s.grades being undefined in the summary student list ──
+  // The /upload response returns lightweight student objects (no grades array).
+  // Full grade detail is only available per-student via /student/<idx>.
+  // We use (s.grades||[]) so this gracefully returns 0 instead of crashing.
   let missingTotal=0;
   students.forEach(s=>{
-    s.grades.filter(g=>g.type==='hw').forEach(g=>{
+    (s.grades||[]).filter(g=>g.type==='hw').forEach(g=>{
       if(!g.grade||g.grade.toLowerCase()==='missing') missingTotal++;
     });
   });
