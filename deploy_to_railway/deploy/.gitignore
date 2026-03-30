@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyc
+.env
+*.zip
+*.pdf
+*.docx
+*.csv
+output/
+tmp/
+.DS_Store
+Thumbs.db
