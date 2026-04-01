@@ -81,40 +81,28 @@ def parse_csv_bytes(data):
     return list(csv.reader(io.StringIO(text)))
 
 def discover_assignments(headers):
-    """Dynamically find all Hw/Quiz/Mock columns from the grades CSV header."""
+    """Dynamically find all Hw/Quiz/Mock columns from the grades CSV header.
+    Uses a tight regex that matches only the label column (e.g. 'Hw 1', 'Mock 4 Paper 2')
+    and not derived columns like 'Mock 4 Paper 2 Grade' or 'Hw 1 Percentage'.
+    """
+    # Matches exactly: Hw N, Quiz N, Mock N, or Mock N Paper N — nothing after
+    LABEL_RE = re.compile(r'^(Hw|Quiz|Mock)\s+\d+(\s+Paper\s+\d+)?$', re.IGNORECASE)
     assignments = []
     for i, h in enumerate(headers):
-        h = h.strip()
-        if re.match(r'^(Hw|Quiz|Mock)\s+\d+', h, re.IGNORECASE) and \
-           not any(w in h.lower() for w in ['grade','percentage','comment','out of','message','structure','paper']):
-            # also catch "Mock 4 Paper 2" style
-            grade_col = i + 1
-            outof_col = None
-            for j in range(i+1, min(i+8, len(headers))):
-                if headers[j].strip().lower() == 'out of':
-                    outof_col = j
-                    break
-            if grade_col < len(headers) and outof_col:
-                # Determine type
-                hl = h.lower()
-                typ = 'hw' if hl.startswith('hw') else ('mock' if hl.startswith('mock') else 'quiz')
-                assignments.append({'name': h, 'label_col': i,
-                                    'grade_col': grade_col, 'outof_col': outof_col, 'type': typ})
-    # Also catch "Mock N Paper N" (appear as individual label col without 'paper' in name filter)
-    for i, h in enumerate(headers):
-        h = h.strip()
-        if re.match(r'^Mock\s+\d+\s+Paper\s+\d+', h, re.IGNORECASE):
-            grade_col = i + 1
-            outof_col = None
-            for j in range(i+1, min(i+8, len(headers))):
-                if headers[j].strip().lower() == 'out of':
-                    outof_col = j
-                    break
-            if grade_col < len(headers) and outof_col:
-                if not any(a['label_col'] == i for a in assignments):
-                    assignments.append({'name': h, 'label_col': i,
-                                        'grade_col': grade_col, 'outof_col': outof_col, 'type': 'mock'})
-    # Sort by column index to preserve order
+        hs = h.strip()
+        if not LABEL_RE.match(hs):
+            continue
+        grade_col = i + 1
+        outof_col = None
+        for j in range(i + 1, min(i + 10, len(headers))):
+            if headers[j].strip().lower() == 'out of':
+                outof_col = j
+                break
+        if grade_col < len(headers) and outof_col:
+            hl = hs.lower()
+            typ = 'hw' if hl.startswith('hw') else ('mock' if hl.startswith('mock') else 'quiz')
+            assignments.append({'name': hs, 'label_col': i,
+                                'grade_col': grade_col, 'outof_col': outof_col, 'type': typ})
     assignments.sort(key=lambda a: a['label_col'])
     return assignments
 
