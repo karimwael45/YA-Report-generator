@@ -773,6 +773,12 @@ def generate_qm():
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)})
 
+@app.route('/download_zip')
+def download_zip():
+    zp = STATE.get('_last_zip')
+    if not zp or not os.path.exists(zp): return 'No ZIP ready', 404
+    return send_file(zp, as_attachment=True, download_name='MathReports_IGCSE.zip')
+
 @app.route('/download_qm_zip')
 def download_qm_zip():
     zp = STATE.get('_last_qm_zip')
