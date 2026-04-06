@@ -670,7 +670,8 @@ def upload():
                             'total': len(STATE['assignments'])},
             'students': [{'name':s['name'], 'code':s['code'], 'assistant':s['assistant'],
                           'avg_hw':s['avg_hw'], 'avg_qm':s['avg_qm'],
-                          'absent_count':s['absent_count']} for s in students]
+                          'absent_count':s['absent_count'], 'grades':s['grades'], 
+                          'att':s['att']} for s in students]
         })
     except Exception as e:
         traceback.print_exc()
@@ -789,11 +790,6 @@ def download_single_qm(idx):
     build_quiz_mock_pdf(s, rec=rd.get('rec',''), problems=rd.get('problems',''),
                         edits=rd.get('edits',{}), tmp_path=tmp)
     return send_file(tmp, as_attachment=True, download_name=fname)
-
-
-    zp = STATE.get('_last_zip')
-    if not zp or not os.path.exists(zp): return 'No ZIP ready', 404
-    return send_file(zp, as_attachment=True, download_name='MathReports_IGCSE.zip')
 
 @app.route('/download_single/<int:idx>')
 def download_single(idx):
