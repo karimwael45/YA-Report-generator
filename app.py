@@ -390,13 +390,18 @@ def _register_fonts():
     global _FONTS_REGISTERED
     if _FONTS_REGISTERED: return
     try:
+        # Try Linux paths (for Railway deployment)
         pdfmetrics.registerFont(TTFont('Poppins-Bold',  '/usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf'))
         pdfmetrics.registerFont(TTFont('Lora-Italic',   '/usr/share/fonts/truetype/google-fonts/Lora-Italic-Variable.ttf'))
         pdfmetrics.registerFont(TTFont('Caladea-Bold',  '/usr/share/fonts/truetype/crosextra/Caladea-Bold.ttf'))
         pdfmetrics.registerFont(TTFont('Caladea',       '/usr/share/fonts/truetype/crosextra/Caladea-Regular.ttf'))
         _FONTS_REGISTERED = True
+        print('✓ Custom fonts registered successfully')
     except Exception as e:
-        print(f'Font registration warning: {e}')
+        # Fonts not available - fall back to standard fonts
+        print(f'⚠️  Custom fonts not available: {e}')
+        print('   Using Helvetica as fallback (this is normal on Windows/Mac)')
+        _FONTS_REGISTERED = True  # Mark as registered even if fallback
 
 # Exact colours extracted from docx XML
 _COL_HDR_BLUE  = colors.HexColor('#4D93D9')
@@ -442,18 +447,40 @@ def build_quiz_mock_pdf(student, rec='', problems='', edits=None, tmp_path=None)
     def st(name, **kw): return ParagraphStyle(name + '_qm_' + str(id(kw)), **kw)
     def sp(h): return Spacer(1, h)
 
-    s_title  = st('title',  fontName='Poppins-Bold', fontSize=22, textColor=colors.black, alignment=TA_CENTER)
-    s_sub1   = st('sub1',   fontName='Lora-Italic',  fontSize=14, textColor=colors.black, alignment=TA_CENTER, spaceAfter=1)
-    s_sub2   = st('sub2',   fontName='Caladea-Bold', fontSize=11, textColor=colors.black, alignment=TA_CENTER)
-    s_body   = st('body',   fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
-    s_bold   = st('bold',   fontName='Caladea-Bold', fontSize=10, textColor=colors.black, alignment=TA_LEFT)
-    s_ctr    = st('ctr',    fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_CENTER)
-    s_ctr_b  = st('ctrb',   fontName='Caladea-Bold', fontSize=10, textColor=colors.black, alignment=TA_CENTER)
-    s_hdr    = st('hdr',    fontName='Poppins-Bold', fontSize=10, textColor=colors.white, alignment=TA_CENTER)
-    s_ahdr   = st('ahdr',   fontName='Poppins-Bold', fontSize=9,  textColor=colors.white, alignment=TA_CENTER)
-    s_box_h  = st('boxh',   fontName='Poppins-Bold', fontSize=12, textColor=colors.black, alignment=TA_CENTER)
-    s_box_b  = st('boxb',   fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
-    s_bol    = st('bol',    fontName='Poppins-Bold', fontSize=18, textColor=colors.black, alignment=TA_CENTER)
+    # Check if custom fonts are available, otherwise use Helvetica fallback
+    try:
+        pdfmetrics.getFont('Poppins-Bold')
+        fonts_available = True
+    except:
+        fonts_available = False
+    
+    if fonts_available:
+        s_title  = st('title',  fontName='Poppins-Bold', fontSize=22, textColor=colors.black, alignment=TA_CENTER)
+        s_sub1   = st('sub1',   fontName='Lora-Italic',  fontSize=14, textColor=colors.black, alignment=TA_CENTER, spaceAfter=1)
+        s_sub2   = st('sub2',   fontName='Caladea-Bold', fontSize=11, textColor=colors.black, alignment=TA_CENTER)
+        s_body   = st('body',   fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+        s_bold   = st('bold',   fontName='Caladea-Bold', fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+        s_ctr    = st('ctr',    fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_CENTER)
+        s_ctr_b  = st('ctrb',   fontName='Caladea-Bold', fontSize=10, textColor=colors.black, alignment=TA_CENTER)
+        s_hdr    = st('hdr',    fontName='Poppins-Bold', fontSize=10, textColor=colors.white, alignment=TA_CENTER)
+        s_ahdr   = st('ahdr',   fontName='Poppins-Bold', fontSize=9,  textColor=colors.white, alignment=TA_CENTER)
+        s_box_h  = st('boxh',   fontName='Poppins-Bold', fontSize=12, textColor=colors.black, alignment=TA_CENTER)
+        s_box_b  = st('boxb',   fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+        s_bol    = st('bol',    fontName='Poppins-Bold', fontSize=18, textColor=colors.black, alignment=TA_CENTER)
+    else:
+        # Fallback to Helvetica (always available)
+        s_title  = st('title',  fontName='Helvetica-Bold', fontSize=22, textColor=colors.black, alignment=TA_CENTER)
+        s_sub1   = st('sub1',   fontName='Helvetica-Oblique', fontSize=14, textColor=colors.black, alignment=TA_CENTER, spaceAfter=1)
+        s_sub2   = st('sub2',   fontName='Helvetica-Bold', fontSize=11, textColor=colors.black, alignment=TA_CENTER)
+        s_body   = st('body',   fontName='Helvetica',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+        s_bold   = st('bold',   fontName='Helvetica-Bold', fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+        s_ctr    = st('ctr',    fontName='Helvetica',      fontSize=10, textColor=colors.black, alignment=TA_CENTER)
+        s_ctr_b  = st('ctrb',   fontName='Helvetica-Bold', fontSize=10, textColor=colors.black, alignment=TA_CENTER)
+        s_hdr    = st('hdr',    fontName='Helvetica-Bold', fontSize=10, textColor=colors.white, alignment=TA_CENTER)
+        s_ahdr   = st('ahdr',   fontName='Helvetica-Bold', fontSize=9,  textColor=colors.white, alignment=TA_CENTER)
+        s_box_h  = st('boxh',   fontName='Helvetica-Bold', fontSize=12, textColor=colors.black, alignment=TA_CENTER)
+        s_box_b  = st('boxb',   fontName='Helvetica',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+        s_bol    = st('bol',    fontName='Helvetica-Bold', fontSize=18, textColor=colors.black, alignment=TA_CENTER)
 
     def p(text, style=None):
         return Paragraph(str(text) if text is not None else '', style or s_body)
