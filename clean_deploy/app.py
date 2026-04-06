@@ -27,7 +27,15 @@ from reportlab.platypus import Image as RLImage
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-app = Flask(__name__)
+# Determine base directory (parent of clean_deploy if running from clean_deploy)
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_TEMPLATE_DIR = os.path.join(_BASE_DIR, 'templates')
+_STATIC_DIR = os.path.join(_BASE_DIR, 'static')
+
+# Initialize Flask with explicit paths
+app = Flask(__name__, 
+            template_folder=_TEMPLATE_DIR,
+            static_folder=_STATIC_DIR)
 app.secret_key = os.environ.get('SECRET_KEY', 'igcse-math-reports-v2-change-in-prod')
 
 # ── Global state ───────────────────────────────────────────────────────────────
@@ -437,12 +445,13 @@ def _register_fonts():
     except Exception as e:
         print(f'Font registration warning: {e}')
 
-_APP_DIR = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.path.abspath('.')
+_APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if '__file__' in dir() else os.path.abspath('.')
 
 def _logo_path(name):
     """Resolve logo path — works locally and on Railway (static folder)."""
     candidates = [
         os.path.join(_APP_DIR, 'static', name),
+        os.path.join(_STATIC_DIR, name),
         os.path.join('/home/claude/template_extracted/word/media',
                      'image1.png' if name == 'logo_math.png' else 'image3.png'),
     ]
