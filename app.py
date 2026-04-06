@@ -643,6 +643,19 @@ def build_quiz_mock_pdf(student, rec='', problems='', edits=None, tmp_path=None)
 def index():
     return render_template('index.html')
 
+@app.route('/debug/routes')
+def debug_routes():
+    """Debug endpoint to list all registered routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint != 'static':
+            routes.append({
+                'path': rule.rule,
+                'methods': ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'})),
+                'endpoint': rule.endpoint
+            })
+    return jsonify({'routes': sorted(routes, key=lambda x: x['path']), 'total': len(routes)})
+
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
