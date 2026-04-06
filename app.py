@@ -581,11 +581,19 @@ def build_quiz_mock_pdf(student, rec='', problems='', edits=None, tmp_path=None)
         nc   = is_not_checked(grade)
         mark = f'{grade}/{outof}' if (outof and not miss and not nc) else (f'/{outof}' if outof else '')
         pct_s = '' if (miss or nc) else pct
+        
+        # Submission status
+        if miss:
+            submission = '<font color="#B71C1C">Missing</font>'
+        elif nc:
+            submission = '<font color="#C07A00">Not Checked</font>'
+        else:
+            submission = '<font color="#2E7D32">Submitted</font>'
 
         style_name = s_ctr_b if is_mock else s_ctr
         grade_rows.append([
             p(dn, style_name),
-            p('', s_ctr),
+            p(submission, s_ctr),
             p(f'<b>{mark}</b>', s_ctr_b),
             p(pct_s, s_ctr),
         ])
