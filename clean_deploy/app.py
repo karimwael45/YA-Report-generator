@@ -22,7 +22,8 @@ from reportlab.lib.units import cm, mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, HRFlowable, KeepTogether)
+                                 TableStyle, HRFlowable, KeepTogether, PageBreak)
+from reportlab.platypus import Image as RLImage
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
@@ -74,6 +75,12 @@ BLACK  = colors.HexColor('#1A1A2E')
 LGREEN = colors.HexColor('#DCFCE7')
 LRED   = colors.HexColor('#FEE2E2')
 LYEL   = colors.HexColor('#FEF9C3')
+
+# Quiz/Mock report specific colors
+_COL_HDR_BLUE   = colors.HexColor('#4D93D9')
+_COL_LIGHT_BLUE = colors.HexColor('#C0E6F5')
+_COL_TEMPLATE_RED = colors.HexColor('#EE0000')
+_COL_ROW_ALT    = colors.HexColor('#F5F5F5')
 
 # ── CSV Parsing ────────────────────────────────────────────────────────────────
 def parse_csv_bytes(data):
@@ -416,6 +423,253 @@ def build_pdf(student, rec='', problems='', edits=None, tmp_path=None):
     doc.build(story)
     return tmp_path
 
+# ── Font registration for Quiz/Mock reports ────────────────────────────────────
+_FONTS_REGISTERED = False
+def _register_fonts():
+    global _FONTS_REGISTERED
+    if _FONTS_REGISTERED: return
+    try:
+        pdfmetrics.registerFont(TTFont('Poppins-Bold',  '/usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf'))
+        pdfmetrics.registerFont(TTFont('Lora-Italic',   '/usr/share/fonts/truetype/google-fonts/Lora-Italic-Variable.ttf'))
+        pdfmetrics.registerFont(TTFont('Caladea-Bold',  '/usr/share/fonts/truetype/crosextra/Caladea-Bold.ttf'))
+        pdfmetrics.registerFont(TTFont('Caladea',       '/usr/share/fonts/truetype/crosextra/Caladea-Regular.ttf'))
+        _FONTS_REGISTERED = True
+    except Exception as e:
+        print(f'Font registration warning: {e}')
+
+_APP_DIR = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.path.abspath('.')
+
+def _logo_path(name):
+    """Resolve logo path — works locally and on Railway (static folder)."""
+    candidates = [
+        os.path.join(_APP_DIR, 'static', name),
+        os.path.join('/home/claude/template_extracted/word/media',
+                     'image1.png' if name == 'logo_math.png' else 'image3.png'),
+    ]
+    for p in candidates:
+        if os.path.exists(p): return p
+    return None
+
+def build_quiz_mock_pdf(student, rec='', problems='', edits=None, tmp_path=None):
+    """
+    Generates a Quiz/Mock-only report card matching the official template exactly.
+    Layout:
+      Page 1: Header + logos, student info, quiz/mock grades table
+      Page 2: Problems that might be facing the student (with watermark)
+      Page 3: OUR RECOMMENDATIONS + BEST OF LUCK !! (with watermark)
+    """
+    _register_fonts()
+    edits = edits or {}
+    if tmp_path is None:
+        tmp_path = tempfile.mktemp(suffix='.pdf')
+
+    W = A4[0] - 3.6*cm   # usable width (1.8cm margins each side)
+
+    doc = SimpleDocTemplate(
+        tmp_path, pagesize=A4,
+        leftMargin=1.8*cm, rightMargin=1.8*cm,
+        topMargin=1.8*cm,  bottomMargin=1.8*cm
+    )
+
+    # ── Style helpers ─────────────────────────────────────────────────────────
+    def st(name, **kw): return ParagraphStyle(name + '_qm_' + str(id(kw)), **kw)
+    def sp(h): return Spacer(1, h)
+
+    s_title  = st('title',  fontName='Poppins-Bold', fontSize=22, textColor=colors.black, alignment=TA_CENTER)
+    s_sub1   = st('sub1',   fontName='Lora-Italic',  fontSize=14, textColor=colors.black, alignment=TA_CENTER, spaceAfter=1)
+    s_sub2   = st('sub2',   fontName='Caladea-Bold', fontSize=11, textColor=colors.black, alignment=TA_CENTER)
+    s_body   = st('body',   fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+    s_bold   = st('bold',   fontName='Caladea-Bold', fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+    s_ctr    = st('ctr',    fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_CENTER)
+    s_ctr_b  = st('ctrb',   fontName='Caladea-Bold', fontSize=10, textColor=colors.black, alignment=TA_CENTER)
+    s_hdr    = st('hdr',    fontName='Poppins-Bold', fontSize=10, textColor=colors.white, alignment=TA_CENTER)
+    s_ahdr   = st('ahdr',   fontName='Poppins-Bold', fontSize=9,  textColor=colors.white, alignment=TA_CENTER)
+    s_box_h  = st('boxh',   fontName='Poppins-Bold', fontSize=12, textColor=colors.black, alignment=TA_CENTER)
+    s_box_b  = st('boxb',   fontName='Caladea',      fontSize=10, textColor=colors.black, alignment=TA_LEFT)
+    s_bol    = st('bol',    fontName='Poppins-Bold', fontSize=18, textColor=colors.black, alignment=TA_CENTER)
+
+    def p(text, style=None):
+        return Paragraph(str(text) if text is not None else '', style or s_body)
+
+    # ── Logos ─────────────────────────────────────────────────────────────────
+    LOGO_SZ = 2.2*cm
+    math_logo_path = _logo_path('logo_math.png')
+    ya_logo_path   = _logo_path('logo_ya.png')
+
+    def math_logo(): return RLImage(math_logo_path, width=LOGO_SZ, height=LOGO_SZ) if math_logo_path else p('')
+    def ya_logo():   return RLImage(ya_logo_path, width=5.2*cm, height=5.0*cm)     if ya_logo_path   else p('')
+
+    # ── PAGE 1 ────────────────────────────────────────────────────────────────
+    story = []
+
+    # Header row: [logo] [title block] [logo]
+    title_inner = Table(
+        [[p('MATHS REPORT CARD', s_title)],
+         [p('Mr. Youssef Ahmed', s_sub1)],
+         [p('Cambridge OL course', s_sub2)]],
+        colWidths=[W - 2*(LOGO_SZ + 0.4*cm)]
+    )
+    title_inner.setStyle(TableStyle([
+        ('ALIGN',        (0,0),(-1,-1), 'CENTER'),
+        ('VALIGN',       (0,0),(-1,-1), 'MIDDLE'),
+        ('LEFTPADDING',  (0,0),(-1,-1), 0),
+        ('RIGHTPADDING', (0,0),(-1,-1), 0),
+        ('TOPPADDING',   (0,0),(-1,-1), 2),
+        ('BOTTOMPADDING',(0,0),(-1,-1), 2),
+        ('LINEBELOW',    (0,0),(-1,-1), 0, colors.white),
+    ]))
+
+    hdr_tbl = Table(
+        [[math_logo(), title_inner, math_logo()]],
+        colWidths=[LOGO_SZ+0.4*cm, W - 2*(LOGO_SZ+0.4*cm), LOGO_SZ+0.4*cm]
+    )
+    hdr_tbl.setStyle(TableStyle([
+        ('VALIGN',       (0,0),(-1,-1), 'MIDDLE'),
+        ('ALIGN',        (0,0),(0,-1),  'LEFT'),
+        ('ALIGN',        (2,0),(2,-1),  'RIGHT'),
+        ('LEFTPADDING',  (0,0),(-1,-1), 0),
+        ('RIGHTPADDING', (0,0),(-1,-1), 0),
+        ('TOPPADDING',   (0,0),(-1,-1), 0),
+        ('BOTTOMPADDING',(0,0),(-1,-1), 0),
+        ('GRID',         (0,0),(-1,-1), 0, colors.white),
+    ]))
+
+    story += [hdr_tbl, sp(16)]   # <-- EXTRA SPACE after "MATHS REPORT CARD" header
+
+    # Student info row
+    name_val = edits.get('name', student['name'])
+    code_val = edits.get('code', student['code'])
+
+    info_tbl = Table(
+        [[p('<b>Student\nname:</b>', s_bold),
+          p(name_val, s_body),
+          p('<b>Group:</b>', s_bold),
+          Paragraph('<b><font color="#EE0000">Cambridge O-Level</font></b>', s_ctr_b)]],
+        colWidths=[W*0.14, W*0.36, W*0.12, W*0.38]
+    )
+    info_tbl.setStyle(TableStyle([
+        ('BOX',          (0,0),(-1,-1), 1.0, colors.black),
+        ('INNERGRID',    (0,0),(-1,-1), 0.8, colors.black),
+        ('VALIGN',       (0,0),(-1,-1), 'MIDDLE'),
+        ('LEFTPADDING',  (0,0),(-1,-1), 6),
+        ('RIGHTPADDING', (0,0),(-1,-1), 6),
+        ('TOPPADDING',   (0,0),(-1,-1), 7),
+        ('BOTTOMPADDING',(0,0),(-1,-1), 7),
+        ('BACKGROUND',   (0,0),(-1,-1), colors.white),
+    ]))
+    story += [info_tbl, sp(10)]
+
+    # Grades table: header row then quiz rows then mock rows
+    quiz_g = [g for g in student['grades'] if g['type'] == 'quiz']
+    mock_g = [g for g in student['grades'] if g['type'] == 'mock']
+    all_qm = quiz_g + mock_g
+
+    sub_hdr_row = [
+        p('Assignment\nName', s_ahdr),
+        p('Submission', s_hdr),
+        p('Mark', s_hdr),
+        p('Percentage', s_hdr),
+    ]
+    grade_rows = [sub_hdr_row]
+
+    for i, g in enumerate(all_qm):
+        is_mock = g['type'] == 'mock'
+        grade = edits.get(f'qm_{g["name"]}_grade', g['grade'])
+        outof = edits.get(f'qm_{g["name"]}_outof', g['outof'])
+        pct   = calc_pct(grade, outof) or g.get('pct', '')
+
+        # Display name
+        dn = g['name']
+        if re.search(r'paper\s*2', dn, re.I): dn = 'Mock 4 (P2)'
+        elif re.search(r'paper\s*4', dn, re.I): dn = 'Mock 4 (P4)'
+
+        miss = is_missing(grade)
+        nc   = is_not_checked(grade)
+        mark = f'{grade}/{outof}' if (outof and not miss and not nc) else (f'/{outof}' if outof else '')
+        pct_s = '' if (miss or nc) else pct
+
+        style_name = s_ctr_b if is_mock else s_ctr
+        grade_rows.append([
+            p(dn, style_name),
+            p('', s_ctr),
+            p(f'<b>{mark}</b>', s_ctr_b),
+            p(pct_s, s_ctr),
+        ])
+
+    col_ws = [W*0.22, W*0.28, W*0.25, W*0.25]
+    grade_tbl = Table(grade_rows, colWidths=col_ws, repeatRows=1, splitByRow=True)
+
+    style_cmds = [
+        ('BOX',          (0,0),(-1,-1), 1.0, colors.black),
+        ('INNERGRID',    (0,0),(-1,-1), 0.5, colors.HexColor('#AAAAAA')),
+        ('BACKGROUND',   (0,0),(-1,0),  _COL_HDR_BLUE),
+        ('VALIGN',       (0,0),(-1,-1), 'MIDDLE'),
+        ('LEFTPADDING',  (0,0),(-1,-1), 5),
+        ('RIGHTPADDING', (0,0),(-1,-1), 5),
+        ('TOPPADDING',   (0,0),(-1,-1), 6),
+        ('BOTTOMPADDING',(0,0),(-1,-1), 6),
+    ]
+    for i in range(1, len(grade_rows)):
+        bg = _COL_ROW_ALT if i % 2 == 0 else colors.white
+        style_cmds.append(('BACKGROUND', (0,i),(-1,i), bg))
+
+    grade_tbl.setStyle(TableStyle(style_cmds))
+    story.append(KeepTogether([grade_tbl]))
+
+    # ── PAGE 2 — Problems ─────────────────────────────────────────────────────
+    story.append(PageBreak())
+
+    prob_val = edits.get('problems', problems)
+    prob_box = Table(
+        [[p('Problems that might be facing the student:', s_box_h)],
+         [p(prob_val or ' ', s_box_b)]],
+        colWidths=[W]
+    )
+    prob_box.setStyle(TableStyle([
+        ('BOX',          (0,0),(-1,-1), 1.2, colors.black),
+        ('LINEBELOW',    (0,0),(-1,0),  1.0, colors.black),
+        ('BACKGROUND',   (0,0),(-1,0),  _COL_LIGHT_BLUE),
+        ('BACKGROUND',   (0,1),(-1,-1), colors.white),
+        ('LEFTPADDING',  (0,0),(-1,-1), 10),
+        ('RIGHTPADDING', (0,0),(-1,-1), 10),
+        ('TOPPADDING',   (0,0),(0,0),   10),
+        ('BOTTOMPADDING',(0,0),(0,0),   10),
+        ('TOPPADDING',   (0,1),(-1,-1), 70),
+        ('BOTTOMPADDING',(0,1),(-1,-1), 70),
+        ('VALIGN',       (0,0),(-1,-1), 'TOP'),
+    ]))
+    story.append(prob_box)
+    story += [sp(30), ya_logo()]
+
+    # ── PAGE 3 — Recommendations + Best of Luck ───────────────────────────────
+    story.append(PageBreak())
+
+    rec_val = edits.get('rec', rec)
+    rec_box = Table(
+        [[p('OUR RECOMMENDATIONS:', s_box_h)],
+         [p(rec_val or ' ', s_box_b)]],
+        colWidths=[W]
+    )
+    rec_box.setStyle(TableStyle([
+        ('BOX',          (0,0),(-1,-1), 1.2, colors.black),
+        ('LINEBELOW',    (0,0),(-1,0),  1.0, colors.black),
+        ('BACKGROUND',   (0,0),(-1,0),  _COL_LIGHT_BLUE),
+        ('BACKGROUND',   (0,1),(-1,-1), colors.white),
+        ('LEFTPADDING',  (0,0),(-1,-1), 10),
+        ('RIGHTPADDING', (0,0),(-1,-1), 10),
+        ('TOPPADDING',   (0,0),(0,0),   10),
+        ('BOTTOMPADDING',(0,0),(0,0),   10),
+        ('TOPPADDING',   (0,1),(-1,-1), 70),
+        ('BOTTOMPADDING',(0,1),(-1,-1), 70),
+        ('VALIGN',       (0,0),(-1,-1), 'TOP'),
+    ]))
+    story.append(rec_box)
+    story += [sp(20), ya_logo(), sp(20)]
+    story.append(p('BEST OF LUCK !!', s_bol))
+
+    doc.build(story)
+    return tmp_path
+
 # ── Flask Routes ───────────────────────────────────────────────────────────────
 @app.route('/')
 @require_auth
@@ -535,6 +789,65 @@ def download_single(idx):
     tmp   = tempfile.mktemp(suffix='.pdf')
     build_pdf(s, rec=rd.get('rec',''), problems=rd.get('problems',''),
               edits=rd.get('edits',{}), tmp_path=tmp)
+    return send_file(tmp, as_attachment=True, download_name=fname)
+
+@require_auth
+@app.route('/generate_qm', methods=['POST'])
+def generate_qm():
+    """Generate Quiz/Mock-only reports in the official template style."""
+    try:
+        data    = request.json
+        indices = data.get('indices', [])
+        if indices == 'all': indices = list(range(len(STATE['students'])))
+        if not indices: return jsonify({'ok': False, 'error': 'No students selected.'})
+
+        tmp_dir = tempfile.mkdtemp()
+        results = []
+        for i in indices:
+            if i >= len(STATE['students']): continue
+            s  = STATE['students'][i]
+            rd = STATE['recommendations'].get(s['name'], {})
+            try:
+                safe  = re.sub(r'[^a-zA-Z0-9 ]', '', s['name']).strip().replace(' ', '_')
+                fname = f"{s['code'] or 'S'}_{safe}_QuizMock.pdf"
+                fpath = os.path.join(tmp_dir, fname)
+                build_quiz_mock_pdf(s, rec=rd.get('rec',''), problems=rd.get('problems',''),
+                                    edits=rd.get('edits',{}), tmp_path=fpath)
+                results.append({'fname': fname, 'path': fpath, 'ok': True})
+            except Exception as e:
+                traceback.print_exc()
+                results.append({'name': s['name'], 'ok': False, 'error': str(e)})
+
+        ok_r = [r for r in results if r['ok']]
+        zip_path = os.path.join(tmp_dir, 'QuizMockReports_IGCSE.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            for r in ok_r: zf.write(r['path'], r['fname'])
+        STATE['_last_qm_zip'] = zip_path
+        return jsonify({'ok': True, 'generated': len(ok_r),
+                        'failed': len(results)-len(ok_r),
+                        'errors': [r for r in results if not r['ok']]})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)})
+
+@require_auth
+@app.route('/download_qm_zip')
+def download_qm_zip():
+    zp = STATE.get('_last_qm_zip')
+    if not zp or not os.path.exists(zp): return 'No ZIP ready', 404
+    return send_file(zp, as_attachment=True, download_name='QuizMockReports_IGCSE.zip')
+
+@require_auth
+@app.route('/download_single_qm/<int:idx>')
+def download_single_qm(idx):
+    if idx < 0 or idx >= len(STATE['students']): return 'Not found', 404
+    s  = STATE['students'][idx]
+    rd = STATE['recommendations'].get(s['name'], {})
+    safe  = re.sub(r'[^a-zA-Z0-9 ]', '', s['name']).strip().replace(' ', '_')
+    fname = f"{s['code'] or 'S'}_{safe}_QuizMock.pdf"
+    tmp   = tempfile.mktemp(suffix='.pdf')
+    build_quiz_mock_pdf(s, rec=rd.get('rec',''), problems=rd.get('problems',''),
+                        edits=rd.get('edits',{}), tmp_path=tmp)
     return send_file(tmp, as_attachment=True, download_name=fname)
 
 @require_auth
